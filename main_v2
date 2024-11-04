@@ -1,0 +1,173 @@
+%Aidan Hayes and Shane Stern
+%Project 1
+
+clear;
+clc;
+close all;
+
+% load data (time,x,y)
+dataA = readmatrix('Data_TCAS_A.csv'); 
+dataB = readmatrix('Data_TCAS_B.csv');
+timeA = dataA(:, 1);
+xA = dataA(:, 2);
+yA = dataA(:, 3);
+timeB = dataB(:, 1);
+xB = dataB(:, 2);
+yB = dataB(:, 3);
+
+%plot raw data positions
+figure()
+plot(xA,yA)
+hold on
+plot(xB,yB)
+
+
+
+
+
+
+
+% xA and yA lin. fit
+[p_xA,SxA] = polyfit(timeA, xA, 1); % p_xA(1) is the velocity uA, p_xA(2) is the xA0
+[p_yA,SyA] = polyfit(timeA, yA, 1); % p_yA(1) is the velocity vA, p_yA(2) is the yA0
+
+% xB and yB lin. fit
+[p_xB,SxB] = polyfit(timeB, xB, 1); % p_xB(1) is the velocity uB, p_xB(2) is the xB0
+[p_yB,SyB] = polyfit(timeB, yB, 1); % p_yB(1) is the velocity vB, p_yB(2) is the yB0
+
+%plotting data/error data
+extraptimeA = (timeA(1):700);
+extraptimeB = (timeB(1):700);
+[posxA,deltaxA] = polyval(p_xA,timeA,SxA);
+[posyA,deltayA] = polyval(p_yA,timeA,SyA);
+[posxB,deltaxB] = polyval(p_xB,timeB,SxB);
+[posyB,deltayB] = polyval(p_yB,timeB,SyB);
+
+posxA1 = polyval(p_xA,extraptimeA,SxA);
+posyA1 = polyval(p_yA,extraptimeA,SyA);
+posxB1 = polyval(p_xB,extraptimeB,SxB);
+posyB1 = polyval(p_yB,extraptimeB,SyB);
+
+plot(posxA1,posyA1)
+plot(posxB1,posyB1)
+
+
+% get initial positions and velocities
+xA0 = p_xA(2); 
+yA0 = p_yA(2);
+xB0 = p_xB(2); 
+yB0 = p_yB(2);
+uA = p_xA(1); 
+vA = p_yA(1);
+uB = p_xB(1); 
+vB = p_yB(1);
+
+
+
+% Calculate tca
+t_ca = (-( (xB0 - xA0) * (uB - uA) + (yB0 - yA0) * (vB - vA) ))/((uB - uA)^2 + (vB - vA)^2);
+
+
+% Calculate min distance
+xA_ca = xA0 + uA * t_ca;
+yA_ca = yA0 + vA * t_ca;
+xB_ca = xB0 + uB * t_ca;
+yB_ca = yB0 + vB * t_ca;
+
+%plot locations at tca
+plot(xA_ca,yA_ca,'o')
+plot(xB_ca,yB_ca,'o')
+
+
+
+
+%min distance
+D_min = sqrt((xB_ca - xA_ca)^2 + (yB_ca - yA_ca)^2);
+
+
+
+%%%%%%%%%%%%%%%%finish error prop%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% Error propagation for t_ca 
+sigma_xA0 = mean(deltaxA); 
+sigma_yA0 = mean(deltayA);
+sigma_xB0 = mean(deltaxB); 
+sigma_yB0 = mean(deltayB);
+
+
+% Partial derivatives for error prop (don't include velocities because they
+% aren't independent)
+denominator = ((-vB + vA)^2 + (-uB + uA)^2);
+d_tca_dxA0 = (uB - uA) / denominator;
+d_tca_dyA0 = (vB - vA) / denominator;
+d_tca_dxB0 = -(uB - uA) / denominator;
+d_tca_dyB0 = -(vB - vA) / denominator;
+
+sigma_tca = sqrt((d_tca_dxA0 * sigma_xA0)^2 + (d_tca_dyA0 * sigma_yA0)^2 + (d_tca_dxB0 * sigma_xB0)^2 + (d_tca_dyB0 * sigma_yB0)^2 );
+
+timecheck = 620.22 + sigma_tca;
+
+xA_d = xA0 + uA * timecheck;
+yA_d = yA0 + vA * timecheck;
+xB_d = xB0 + uB * timecheck;
+yB_d = yB0 + vB * timecheck;
+
+%Check for distance error
+distance = sqrt((xB_d-xA_d)^2+(yB_d-yA_d)^2); 
+distance_error = distance - D_min;
+
+
+% check for TCAS
+TA_threshold = 3.3; 
+RA_threshold = 2.0; 
+
+if D_min < RA_threshold
+    warning_msg = 'Resolution Advisory (RA) issued';
+elseif D_min < TA_threshold
+    warning_msg = 'Traffic Advisory (TA) issued';
+else
+    warning_msg = 'No advisory issued';
+end
+
+%plot details
+title('Airplane Locations')
+legend('Plane A Data', 'Plane B Data', 'Plane A Extrapolation', 'Plane B Extrapolation', 'Plane A Location at TCA', 'Plane B Location at TCA','Location','northwest')
+xlabel('X position')
+ylabel('Y position')
+hold off
+
+figure()
+hold on
+plot(extraptimeA,posxA1)
+scatter(timeA,xA)
+plot(extraptimeA,posyA1)
+scatter(timeA,yA)
+title('X and Y Data Over Time: Flight A')
+legend('X Extrap.','X Data','Y Extrap.','Y Data')
+xlabel('Time (s)')
+ylabel('Position (nmi)')
+hold off
+
+figure()
+hold on
+plot(extraptimeB,posxB1)
+scatter(timeB,xB)
+plot(extraptimeB,posyB1)
+scatter(timeB,yB)
+title('X and Y Data Over Time: Flight B')
+legend('X Extrap.','X Data','Y Extrap.','Y Data')
+xlabel('Time (s)')
+ylabel('Position (nmi)')
+hold off
+
+
+% Display Results
+fprintf('Time of Closest Approach (t_ca): %.2f seconds\n', t_ca);
+fprintf('Minimum Distance (D_min): %.2f nmi\n', D_min);
+fprintf('Error in t_ca %.2f seconds\n', sigma_tca);
+fprintf('Error in Minimum Distance is %.2f nmi\n', distance_error)
+fprintf('Warning: %s\n', warning_msg);
+
+
+
